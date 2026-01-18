@@ -1,0 +1,53 @@
+name: Tags
+
+on:
+  push:
+    tags: ['*']
+
+permissions:
+  actions: write
+  packages: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  linting-packer:
+    name: Linting
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.3.0
+        with:
+          dockerfile: packer/Dockerfile
+
+  build-packer:
+    name: Build
+    uses: ilyes512/github-actions/.github/workflows/build.yml@1.0.5
+    needs: linting-packer
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on:
+          - os: ubuntu-24.04
+            platform: linux/amd64
+          - os: ubuntu-24.04-arm
+            platform: linux/arm64
+    with:
+      runs-on: ${{ matrix.runs-on.os }}
+      platform: ${{ matrix.runs-on.platform }}
+      image-name: ghcr.io/${{ github.repository_owner }}/packer
+      dockerfile: packer/Dockerfile
+
+  merge-packer:
+    name: Merge
+    uses: ilyes512/github-actions/.github/workflows/merge.yml@1.0.5
+    needs: build-packer
+    with:
+      runs-on: ubuntu-24.04
+      image-name: ghcr.io/${{ github.repository_owner }}/packer
