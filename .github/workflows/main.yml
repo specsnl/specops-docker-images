@@ -28,7 +28,7 @@ jobs:
 
   build-packer:
     name: Build
-    uses: ilyes512/github-actions/.github/workflows/build.yml@1.0.5
+    uses: ilyes512/github-actions/.github/workflows/build.yml@1.0.6
     needs: linting-packer
     strategy:
       fail-fast: false
@@ -46,7 +46,7 @@ jobs:
 
   merge:
     name: Merge
-    uses: ilyes512/github-actions/.github/workflows/merge.yml@1.0.5
+    uses: ilyes512/github-actions/.github/workflows/merge.yml@1.0.6
     needs: build-packer
     with:
       runs-on: ubuntu-24.04
