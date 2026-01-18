@@ -1,0 +1,28 @@
+# https://taskfile.dev
+version: "3"
+
+silent: true
+
+vars:
+  # BUILDKIT_PROGRESS: plain
+  # Latatest version of Hadolint: https://hub.docker.com/r/hadolint/hadolint/tags or https://github.com/hadolint/hadolint/releases
+  HADOLINT_TAG_VERSION: v2.14.0
+
+tasks:
+
+  lint:packer:
+    desc: Apply a Dockerfile linter (https://github.com/hadolint/hadolint)
+    cmds:
+      - docker run
+        --interactive
+        --rm
+        hadolint/hadolint:{{.HADOLINT_TAG_VERSION}}
+        hadolint
+        -
+        < ./packer/Dockerfile
+
+  build:packer:
+    desc: Build the Packer image
+    deps: [lint:packer]
+    cmds:
+     - docker build --file packer/Dockerfile --tag specsnl/packer:local .
