@@ -68,6 +68,8 @@ jobs:
     with:
       runs-on: ubuntu-24.04
       image-name: ghcr.io/${{ github.repository_owner }}/packer
+      title: packer
+      description: Docker Image with HashiCorp Packer installed
 
   check:
     name: Check
