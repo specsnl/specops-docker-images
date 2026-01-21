@@ -43,6 +43,8 @@ jobs:
       platform: ${{ matrix.runs-on.platform }}
       image-name: ghcr.io/${{ github.repository_owner }}/packer
       dockerfile: packer/Dockerfile
+      title: packer
+      description: Docker Image with HashiCorp Packer installed
 
   merge:
     name: Merge
