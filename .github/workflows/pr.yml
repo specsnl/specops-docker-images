@@ -43,7 +43,7 @@ jobs:
 
   build-packer:
     name: Build
-    uses: ilyes512/github-actions/.github/workflows/build.yml@1.0.10-rc.1
+    uses: ilyes512/github-actions/.github/workflows/build.yml@1.0.11
     needs: [changes, linting-packer]
     if: ${{ needs.changes.outputs.packer == 'true' }}
     strategy:
@@ -64,7 +64,7 @@ jobs:
 
   merge-packer:
     name: Merge
-    uses: ilyes512/github-actions/.github/workflows/merge.yml@1.0.10-rc.1
+    uses: ilyes512/github-actions/.github/workflows/merge.yml@1.0.11
     needs: [changes, build-packer]
     if: ${{ needs.changes.outputs.packer == 'true' }}
     with:
