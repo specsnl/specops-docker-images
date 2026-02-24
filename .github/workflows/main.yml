@@ -55,3 +55,49 @@ jobs:
       image-name: ghcr.io/${{ github.repository_owner }}/packer
       title: packer
       description: Docker Image with HashiCorp Packer installed
+
+  store-digest:
+    name: Store Digest
+    runs-on: ubuntu-24.04
+    needs: merge
+    steps:
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get and store image digest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/packer"
+          IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          
+          # Get the digest of the main image
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE_NAME_LOWER}:main" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          
+          echo "Image digest: $DIGEST"
+          echo "Commit SHA: ${{ github.sha }}"
+          
+          # Store digest as a repository variable for use in tag workflow
+          if gh api /repos/${{ github.repository }}/actions/variables/PACKER_MAIN_DIGEST 2>/dev/null; then
+            gh api --method PATCH /repos/${{ github.repository }}/actions/variables/PACKER_MAIN_DIGEST \
+              -f name='PACKER_MAIN_DIGEST' \
+              -f value="${DIGEST}"
+          else
+            gh api --method POST /repos/${{ github.repository }}/actions/variables \
+              -f name='PACKER_MAIN_DIGEST' \
+              -f value="${DIGEST}"
+          fi
+          
+          # Also store the commit SHA that produced this digest
+          if gh api /repos/${{ github.repository }}/actions/variables/PACKER_MAIN_COMMIT 2>/dev/null; then
+            gh api --method PATCH /repos/${{ github.repository }}/actions/variables/PACKER_MAIN_COMMIT \
+              -f name='PACKER_MAIN_COMMIT' \
+              -f value="${{ github.sha }}"
+          else
+            gh api --method POST /repos/${{ github.repository }}/actions/variables \
+              -f name='PACKER_MAIN_COMMIT' \
+              -f value="${{ github.sha }}"
+          fi
