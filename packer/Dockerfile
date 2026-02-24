@@ -5,7 +5,7 @@
 FROM hashicorp/packer:light-1.15.0
 
 RUN apk add --no-cache --upgrade --no-progress \
-        docker-cli=28.3.3-r5 \
+        docker-cli=29.1.3-r2 \
     && packer plugins install github.com/hashicorp/docker \
     && packer plugins install github.com/hashicorp/ansible \
     && packer plugins install github.com/UpCloudLtd/upcloud
