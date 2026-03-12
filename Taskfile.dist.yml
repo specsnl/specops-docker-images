@@ -10,7 +10,7 @@ vars:
 
 tasks:
 
-  lint:packer:
+  packer:lint:
     desc: Apply a Dockerfile linter (https://github.com/hadolint/hadolint)
     cmds:
       - docker run
@@ -21,8 +21,13 @@ tasks:
         -
         < ./packer/Dockerfile
 
-  build:packer:
+  packer:build:
     desc: Build the Packer image
     deps: [lint:packer]
     cmds:
      - docker build --file packer/Dockerfile --tag specsnl/packer:local .
+
+  packer:shell:
+    desc: Shell into a Packer docker image
+    cmds:
+      - docker run --rm --interactive --tty --entrypoint '' specsnl/packer:local /bin/bash
