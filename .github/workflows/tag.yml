@@ -15,9 +15,125 @@ concurrency:
 
 jobs:
 
+  check-changes:
+    name: Check Changes
+    runs-on: ubuntu-24.04
+    outputs:
+      needs_rebuild: ${{ steps.check.outputs.needs_rebuild }}
+      main_digest: ${{ steps.check.outputs.main_digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check if source files changed since main image was built
+        id: check
+        env:
+          PACKER_MAIN_COMMIT: ${{ vars.PACKER_MAIN_COMMIT }}
+          PACKER_MAIN_DIGEST: ${{ vars.PACKER_MAIN_DIGEST }}
+        run: |
+          echo "Stored main commit: $PACKER_MAIN_COMMIT"
+          echo "Stored main digest: $PACKER_MAIN_DIGEST"
+          echo "Current tag commit: ${{ github.sha }}"
+          
+          # If no stored commit/digest, we need to rebuild
+          if [[ -z "$PACKER_MAIN_COMMIT" ]] || [[ -z "$PACKER_MAIN_DIGEST" ]]; then
+            echo "No stored main image info found, rebuild required"
+            echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if the tag points to the same commit as the stored main commit
+          if [[ "${{ github.sha }}" == "$PACKER_MAIN_COMMIT" ]]; then
+            echo "Tag points to same commit as main image, no rebuild needed"
+            echo "needs_rebuild=false" >> $GITHUB_OUTPUT
+            echo "main_digest=$PACKER_MAIN_DIGEST" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if source files changed between stored main commit and current tag
+          CHANGED_FILES=$(git diff --name-only "$PACKER_MAIN_COMMIT" "${{ github.sha }}" -- 'packer/**' '.dockerignore' 2>/dev/null || echo "error")
+          
+          if [[ "$CHANGED_FILES" == "error" ]]; then
+            echo "Could not compare commits (main commit may not exist in history), rebuild required"
+            echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          if [[ -n "$CHANGED_FILES" ]]; then
+            echo "Source files changed since main image was built:"
+            echo "$CHANGED_FILES"
+            echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+          else
+            echo "No source file changes detected, can promote main image"
+            echo "needs_rebuild=false" >> $GITHUB_OUTPUT
+            echo "main_digest=$PACKER_MAIN_DIGEST" >> $GITHUB_OUTPUT
+          fi
+
+  promote:
+    name: Promote Main Image
+    runs-on: ubuntu-24.04
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.needs_rebuild == 'false' }}
+    steps:
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Extract tag name
+        id: tag
+        run: echo "name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Verify main image exists and digest matches
+        id: verify
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/packer"
+          IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          EXPECTED_DIGEST="${{ needs.check-changes.outputs.main_digest }}"
+          
+          echo "Verifying main image digest..."
+          CURRENT_DIGEST=$(docker buildx imagetools inspect "${IMAGE_NAME_LOWER}:main" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          
+          echo "Expected digest: $EXPECTED_DIGEST"
+          echo "Current digest:  $CURRENT_DIGEST"
+          
+          if [[ "$CURRENT_DIGEST" != "$EXPECTED_DIGEST" ]]; then
+            echo "::error::Digest mismatch! Main image has changed since last recorded build."
+            echo "This could indicate the main image was rebuilt. Please re-run the main workflow or rebuild this tag."
+            exit 1
+          fi
+          
+          echo "Digest verified successfully"
+      - name: Promote main image to tag
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/packer"
+          IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          TAG_NAME="${{ steps.tag.outputs.name }}"
+          
+          echo "Promoting ${IMAGE_NAME_LOWER}:main to ${IMAGE_NAME_LOWER}:${TAG_NAME}"
+          
+          docker buildx imagetools create \
+            --tag "${IMAGE_NAME_LOWER}:${TAG_NAME}" \
+            --tag "${IMAGE_NAME_LOWER}:latest" \
+            "${IMAGE_NAME_LOWER}:main"
+          
+          echo "Successfully promoted image to:"
+          echo "  - ${IMAGE_NAME_LOWER}:${TAG_NAME}"
+          echo "  - ${IMAGE_NAME_LOWER}:latest"
+      - name: Inspect promoted image
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/packer"
+          IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          docker buildx imagetools inspect "${IMAGE_NAME_LOWER}:${{ steps.tag.outputs.name }}"
+
   linting-packer:
     name: Linting
     runs-on: ubuntu-24.04
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.needs_rebuild == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -29,7 +145,8 @@ jobs:
   build-packer:
     name: Build
     uses: ilyes512/github-actions/.github/workflows/build.yml@1.0.12
-    needs: linting-packer
+    needs: [check-changes, linting-packer]
+    if: ${{ needs.check-changes.outputs.needs_rebuild == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,9 +166,39 @@ jobs:
   merge-packer:
     name: Merge
     uses: ilyes512/github-actions/.github/workflows/merge.yml@1.0.12
-    needs: build-packer
+    needs: [check-changes, build-packer]
+    if: ${{ needs.check-changes.outputs.needs_rebuild == 'true' }}
     with:
       runs-on: ubuntu-24.04
       image-name: ghcr.io/${{ github.repository_owner }}/packer
       title: packer
       description: Docker Image with HashiCorp Packer installed
+
+  update-latest:
+    name: Update Latest Tag
+    runs-on: ubuntu-24.04
+    needs: [check-changes, merge-packer]
+    if: ${{ needs.check-changes.outputs.needs_rebuild == 'true' }}
+    steps:
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Extract tag name
+        id: tag
+        run: echo "name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Add latest tag
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/packer"
+          IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          TAG_NAME="${{ steps.tag.outputs.name }}"
+          
+          echo "Adding latest tag to ${IMAGE_NAME_LOWER}:${TAG_NAME}"
+          
+          docker buildx imagetools create \
+            --tag "${IMAGE_NAME_LOWER}:latest" \
+            "${IMAGE_NAME_LOWER}:${TAG_NAME}"
