@@ -2,7 +2,7 @@
 # check=error=true
 
 # Latest version: https://hub.docker.com/r/hashicorp/packer/tags?page=1&name=light
-FROM hashicorp/packer:light-1.15.0
+FROM hashicorp/packer:light-1.15.1
 
 ENV PACKER_CONFIG_DIR=/root/.config/packer
 ENV PACKER_PLUGIN_PATH=${PACKER_CONFIG_DIR}/plugins
