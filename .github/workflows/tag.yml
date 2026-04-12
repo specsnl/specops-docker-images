@@ -48,7 +48,7 @@ jobs:
 
   merge-packer:
     name: Merge
-    uses: ilyes512/github-actions/.github/workflows/merge.yml@1.0.12
+    uses: ilyes512/github-actions/.github/workflows/merge.yml@1.2.1
     needs: build-packer
     with:
       runs-on: ubuntu-24.04
