@@ -23,7 +23,7 @@ tasks:
 
   packer:build:
     desc: Build the Packer image
-    deps: [lint:packer]
+    deps: [packer:lint]
     cmds:
      - docker build --file packer/Dockerfile --tag specsnl/packer:local .
 
