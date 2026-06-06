@@ -1,1 +1,3 @@
 *
+!packer/pyproject.toml
+!packer/uv.lock
