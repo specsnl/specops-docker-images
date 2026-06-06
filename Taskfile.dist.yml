@@ -22,7 +22,7 @@ tasks:
         < ./packer/Dockerfile
 
   packer:build:
-    desc: Build the Packer image
+    desc: Build the Packer image (includes Ansible)
     deps: [packer:lint]
     cmds:
      - docker build --file packer/Dockerfile --tag specsnl/packer:local .
