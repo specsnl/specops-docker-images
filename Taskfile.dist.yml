@@ -9,7 +9,6 @@ vars:
   HADOLINT_TAG_VERSION: v2.14.0
 
 tasks:
-
   packer:lint:
     desc: Apply a Dockerfile linter (https://github.com/hadolint/hadolint)
     cmds:
@@ -25,9 +24,12 @@ tasks:
     desc: Build the Packer image (includes Ansible)
     deps: [packer:lint]
     cmds:
-     - docker build --file packer/Dockerfile --tag specsnl/packer:local .
+      - docker build --file packer/Dockerfile --tag specsnl/packer:local .
 
   packer:shell:
     desc: Shell into a Packer docker image
     cmds:
-      - docker run --rm --interactive --tty --entrypoint '' specsnl/packer:local /bin/bash
+      - docker run --rm --interactive --tty
+        --entrypoint ''
+        --volume $(pwd):/workspace
+        specsnl/packer:local /bin/bash
