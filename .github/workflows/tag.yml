@@ -28,7 +28,7 @@ jobs:
 
   build-packer:
     name: Build
-    uses: specsnl/github-actions/.github/workflows/build.yml@1.2.3
+    uses: specsnl/github-actions/.github/workflows/build.yml@2.1.0
     needs: linting-packer
     strategy:
       fail-fast: false
@@ -48,7 +48,7 @@ jobs:
 
   merge-packer:
     name: Merge
-    uses: specsnl/github-actions/.github/workflows/merge.yml@1.2.3
+    uses: specsnl/github-actions/.github/workflows/merge.yml@2.1.0
     needs: build-packer
     with:
       runs-on: ubuntu-24.04
